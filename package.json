@@ -1,0 +1,16 @@
+{
+  "name": "taskflow",
+  "version": "1.0.0",
+  "description": "TaskFlow - Collaborative Task Management",
+  "scripts": {
+    "install:backend": "cd backend && npm install",
+    "install:frontend": "cd frontend && npm install",
+    "postinstall": "npm run install:backend && npm run install:frontend",
+    "build": "cd frontend && npm run build",
+    "start": "cd backend && node index.js",
+    "dev": "echo \"Run backend and frontend separately for development\""
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
