@@ -16,6 +16,11 @@ app.use(express.json());
 const authRoutes = require('./routes/auth');
 app.use('/api/auth', authRoutes);
 
+// Health check endpoint for Railway
+app.get('/health', (req, res) => {
+  res.status(200).json({ status: 'healthy', timestamp: new Date().toISOString() });
+});
+
 // Project routes
 const projectRoutes = require('./routes/projects');
 app.use('/api/projects', projectRoutes);
@@ -33,10 +38,11 @@ const frontendPath = path.join(__dirname, '..', 'frontend', 'dist');
 app.use(express.static(frontendPath));
 
 // SPA fallback — serve index.html for any non-API route
-app.get('/{*path}', (req, res) => {
+app.get('*', (req, res) => {
   const indexPath = path.join(frontendPath, 'index.html');
   res.sendFile(indexPath, (err) => {
     if (err) {
+      // If index.html is missing, return a simple API status
       res.json({ message: 'TaskFlow API is running...' });
     }
   });
