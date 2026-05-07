@@ -9,6 +9,12 @@ require('./db');
 const app = express();
 const port = process.env.PORT || 5000;
 
+console.log('--- Startup Debug Information ---');
+console.log(`Port: ${port}`);
+console.log(`Database URL present: ${!!process.env.DATABASE_URL}`);
+console.log(`Node Environment: ${process.env.NODE_ENV}`);
+console.log('---------------------------------');
+
 app.use(cors());
 app.use(express.json());
 
@@ -42,8 +48,8 @@ app.get('*', (req, res) => {
   const indexPath = path.join(frontendPath, 'index.html');
   res.sendFile(indexPath, (err) => {
     if (err) {
-      // If index.html is missing, return a simple API status
-      res.json({ message: 'TaskFlow API is running...' });
+      console.log('Static file error or missing index.html at:', indexPath);
+      res.json({ message: 'TaskFlow API is running, but frontend is not yet built.' });
     }
   });
 });
