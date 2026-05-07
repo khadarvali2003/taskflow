@@ -10,8 +10,8 @@ router.post('/signup', async (req, res) => {
   const { name, email, password } = req.body;
 
   try {
-    const existing = db.prepare('SELECT id FROM users WHERE email = ?').get(email);
-    if (existing) {
+    const existing = await db.query('SELECT id FROM users WHERE email = $1', [email]);
+    if (existing.rows[0]) {
       return res.status(400).json({ message: 'User already exists' });
     }
 
@@ -19,7 +19,7 @@ router.post('/signup', async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, salt);
     const id = crypto.randomUUID();
 
-    db.prepare('INSERT INTO users (id, name, email, password) VALUES (?, ?, ?, ?)').run(id, name, email, hashedPassword);
+    await db.query('INSERT INTO users (id, name, email, password) VALUES ($1, $2, $3, $4)', [id, name, email, hashedPassword]);
 
     const token = jwt.sign({ id }, process.env.JWT_SECRET, { expiresIn: '7d' });
 
@@ -35,7 +35,9 @@ router.post('/login', async (req, res) => {
   const { email, password } = req.body;
 
   try {
-    const user = db.prepare('SELECT * FROM users WHERE email = ?').get(email);
+    const result = await db.query('SELECT * FROM users WHERE email = $1', [email]);
+    const user = result.rows[0];
+    
     if (!user) {
       return res.status(400).json({ message: 'Invalid credentials' });
     }

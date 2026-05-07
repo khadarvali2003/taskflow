@@ -5,20 +5,20 @@ const db = require('../db');
 const auth = require('../middleware/auth');
 
 // Create Project
-router.post('/', auth, (req, res) => {
+router.post('/', auth, async (req, res) => {
   const { name, description } = req.body;
   const owner_id = req.user.id;
 
   try {
     const id = crypto.randomUUID();
 
-    db.prepare('INSERT INTO projects (id, name, description, owner_id) VALUES (?, ?, ?, ?)').run(id, name, description || '', owner_id);
+    await db.query('INSERT INTO projects (id, name, description, owner_id) VALUES ($1, $2, $3, $4)', [id, name, description || '', owner_id]);
 
     // Add creator as Admin
-    db.prepare('INSERT INTO project_members (project_id, user_id, role) VALUES (?, ?, ?)').run(id, owner_id, 'Admin');
+    await db.query('INSERT INTO project_members (project_id, user_id, role) VALUES ($1, $2, $3)', [id, owner_id, 'Admin']);
 
-    const project = db.prepare('SELECT * FROM projects WHERE id = ?').get(id);
-    res.json(project);
+    const result = await db.query('SELECT * FROM projects WHERE id = $1', [id]);
+    res.json(result.rows[0]);
   } catch (err) {
     console.error('Create Project Error:', err);
     res.status(500).json({ message: 'Server Error', error: err.message });
@@ -26,16 +26,16 @@ router.post('/', auth, (req, res) => {
 });
 
 // Get User Projects
-router.get('/', auth, (req, res) => {
+router.get('/', auth, async (req, res) => {
   try {
-    const projects = db.prepare(`
+    const result = await db.query(`
       SELECT p.*, pm.role 
       FROM projects p 
       JOIN project_members pm ON p.id = pm.project_id 
-      WHERE pm.user_id = ?
-    `).all(req.user.id);
+      WHERE pm.user_id = $1
+    `, [req.user.id]);
 
-    res.json(projects);
+    res.json(result.rows);
   } catch (err) {
     console.error('Get Projects Error:', err);
     res.status(500).json({ message: 'Server Error', error: err.message });
@@ -43,16 +43,16 @@ router.get('/', auth, (req, res) => {
 });
 
 // Get project members
-router.get('/:id/members', auth, (req, res) => {
+router.get('/:id/members', auth, async (req, res) => {
   try {
-    const members = db.prepare(`
+    const result = await db.query(`
       SELECT u.id, u.name, u.email, pm.role 
       FROM project_members pm 
       JOIN users u ON pm.user_id = u.id 
-      WHERE pm.project_id = ?
-    `).all(req.params.id);
+      WHERE pm.project_id = $1
+    `, [req.params.id]);
 
-    res.json(members);
+    res.json(result.rows);
   } catch (err) {
     console.error('Get Members Error:', err);
     res.status(500).json({ message: 'Server Error', error: err.message });
@@ -60,30 +60,34 @@ router.get('/:id/members', auth, (req, res) => {
 });
 
 // Add Member (Admin only)
-router.post('/:id/members', auth, (req, res) => {
+router.post('/:id/members', auth, async (req, res) => {
   const { email, role } = req.body;
   const projectId = req.params.id;
 
   try {
     // Check if requester is Admin
-    const membership = db.prepare('SELECT role FROM project_members WHERE project_id = ? AND user_id = ?').get(projectId, req.user.id);
+    const membershipResult = await db.query('SELECT role FROM project_members WHERE project_id = $1 AND user_id = $2', [projectId, req.user.id]);
+    const membership = membershipResult.rows[0];
 
     if (!membership || membership.role !== 'Admin') {
       return res.status(403).json({ message: 'Access denied. Admins only.' });
     }
 
     // Find user by email
-    const user = db.prepare('SELECT id FROM users WHERE email = ?').get(email);
+    const userResult = await db.query('SELECT id FROM users WHERE email = $1', [email]);
+    const user = userResult.rows[0];
     if (!user) {
       return res.status(404).json({ message: 'User not found with that email' });
     }
 
     // Check if already a member
-    const existing = db.prepare('SELECT * FROM project_members WHERE project_id = ? AND user_id = ?').get(projectId, user.id);
+    const existingResult = await db.query('SELECT * FROM project_members WHERE project_id = $1 AND user_id = $2', [projectId, user.id]);
+    const existing = existingResult.rows[0];
+    
     if (existing) {
-      db.prepare('UPDATE project_members SET role = ? WHERE project_id = ? AND user_id = ?').run(role || 'Member', projectId, user.id);
+      await db.query('UPDATE project_members SET role = $1 WHERE project_id = $2 AND user_id = $3', [role || 'Member', projectId, user.id]);
     } else {
-      db.prepare('INSERT INTO project_members (project_id, user_id, role) VALUES (?, ?, ?)').run(projectId, user.id, role || 'Member');
+      await db.query('INSERT INTO project_members (project_id, user_id, role) VALUES ($1, $2, $3)', [projectId, user.id, role || 'Member']);
     }
 
     res.json({ message: 'Member added successfully' });
@@ -94,17 +98,18 @@ router.post('/:id/members', auth, (req, res) => {
 });
 
 // Remove Member (Admin only)
-router.delete('/:id/members/:userId', auth, (req, res) => {
+router.delete('/:id/members/:userId', auth, async (req, res) => {
   const { id: projectId, userId } = req.params;
 
   try {
-    const membership = db.prepare('SELECT role FROM project_members WHERE project_id = ? AND user_id = ?').get(projectId, req.user.id);
+    const membershipResult = await db.query('SELECT role FROM project_members WHERE project_id = $1 AND user_id = $2', [projectId, req.user.id]);
+    const membership = membershipResult.rows[0];
 
     if (!membership || membership.role !== 'Admin') {
       return res.status(403).json({ message: 'Access denied. Admins only.' });
     }
 
-    db.prepare('DELETE FROM project_members WHERE project_id = ? AND user_id = ?').run(projectId, userId);
+    await db.query('DELETE FROM project_members WHERE project_id = $1 AND user_id = $2', [projectId, userId]);
     res.json({ message: 'Member removed successfully' });
   } catch (err) {
     console.error('Remove Member Error:', err);
